@@ -272,7 +272,7 @@ function initCanvas() {
   }, { threshold: 0 }).observe(canvas);
 }
 
-/* ── 5. OVO DO TOPO: órbitas 3D, batimento, scanner e partículas ── */
+/* ── 5. OVO DO TOPO: flutuação suave, respiração do brilho e uma órbita ── */
 function initEgg3D() {
   const container = $('#egg-3d-canvas-container');
   const img = $('#egg-hero-img');
@@ -290,114 +290,50 @@ function initEgg3D() {
   }
   resize(); new ResizeObserver(resize).observe(cb);
 
-  let tmx = 0, tmy = 0, mx = 0, my = 0, hover = false;
+  let tmx = 0, tmy = 0, mx = 0, my = 0;
   container.addEventListener('mousemove', (e) => {
     const r = container.getBoundingClientRect();
-    tmx = (e.clientX - r.left) / r.width - 0.5; tmy = (e.clientY - r.top) / r.height - 0.5; hover = true;
+    tmx = (e.clientX - r.left) / r.width - 0.5; tmy = (e.clientY - r.top) / r.height - 0.5;
   });
-  container.addEventListener('mouseleave', () => { tmx = 0; tmy = 0; hover = false; });
+  container.addEventListener('mouseleave', () => { tmx = 0; tmy = 0; });
 
-  // três órbitas inclinadas, cada uma com "elétrons" e rastro
-  const ORB = [
-    { a: 0.46, b: 0.15, rot: -0.42, sp: 1.15, col: [48, 213, 255], n: 2, ph: 0 },
-    { a: 0.43, b: 0.13, rot: 0.55, sp: -0.85, col: [0, 229, 160], n: 2, ph: 1.3 },
-    { a: 0.49, b: 0.10, rot: 0.05, sp: 0.6, col: [139, 92, 246], n: 1, ph: 2.6 },
-  ];
-  const sparks = Array.from({ length: 46 }, () => ({ x: Math.random(), y: Math.random(), v: 0.04 + Math.random() * 0.09, r: 0.6 + Math.random() * 1.6, w: Math.random() * 6.28, g: Math.random() < 0.35 }));
-  const waves = [];
-  let t = 0, last = performance.now(), visible = true, lastBeat = -1;
-
-  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, a).toFixed(3)})`;
-  const orbPt = (o, u, cx, cy) => {
-    const x = o.a * S * Math.cos(u), y = o.b * S * Math.sin(u), cr = Math.cos(o.rot), sr = Math.sin(o.rot);
-    return [cx + x * cr - y * sr, cy + x * sr + y * cr];
+  const O = { a: 0.44, b: 0.12, rot: -0.32 };          // uma órbita, levemente inclinada
+  const pt = (u, cx, cy) => {
+    const x = O.a * S * Math.cos(u), y = O.b * S * Math.sin(u), c = Math.cos(O.rot), s = Math.sin(O.rot);
+    return [cx + x * c - y * s, cy + x * s + y * c];
   };
+  let t = 0, last = performance.now(), visible = true;
 
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     if (!visible || !isPageVisible) { raf(frame); return; }
-    if (!reduce) t += dt * (hover ? 1.5 : 1);
-    mx += (tmx - mx) * 0.07; my += (tmy - my) * 0.07;
+    if (!reduce) t += dt;
+    mx += (tmx - mx) * 0.06; my += (tmy - my) * 0.06;
 
-    // batimento "tum-tum" (~70 bpm)
-    const period = 0.86, ph = (t % period) / period;
-    const beat = Math.exp(-Math.pow((ph - 0.06) / 0.045, 2)) + 0.6 * Math.exp(-Math.pow((ph - 0.27) / 0.055, 2));
-    const nb = Math.floor(t / period);
-    if (nb !== lastBeat) { lastBeat = nb; waves.push({ t0: t }); if (waves.length > 4) waves.shift(); }
+    const breath = (Math.sin(t * 1.6) + 1) / 2;          // respiração lenta do brilho
+    const floatY = Math.sin(t * 0.9) * 8;
+    img.style.transform = `perspective(900px) translateY(${floatY.toFixed(2)}px) rotateY(${(mx * 12).toFixed(2)}deg) rotateX(${(-my * 9).toFixed(2)}deg)`;
 
-    const floatY = Math.sin(t * 1.05) * 9, sc = 1 + beat * 0.035 + (hover ? 0.03 : 0);
-    img.style.transform = `perspective(900px) translateY(${floatY.toFixed(2)}px) rotateY(${(mx * 16 + Math.sin(t * 0.6) * 4).toFixed(2)}deg) rotateX(${(-my * 12).toFixed(2)}deg) scale(${sc.toFixed(4)})`;
-
-    const cx = S / 2 + mx * 14, cy = S / 2 + floatY + my * 8;
+    const cx = S / 2, cy = S / 2 + floatY;
     B.clearRect(0, 0, S, S); Fc.clearRect(0, 0, S, S);
 
-    // — fundo: aura que pulsa
-    B.globalCompositeOperation = 'lighter';
-    let g = B.createRadialGradient(cx, cy, S * 0.05, cx, cy, S * 0.42);
-    g.addColorStop(0, `rgba(0,190,255,${(0.2 + beat * 0.3).toFixed(3)})`); g.addColorStop(0.6, 'rgba(0,229,160,0.05)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    // aura suave atrás do ovo
+    const g = B.createRadialGradient(cx, cy, S * 0.05, cx, cy, S * 0.4);
+    g.addColorStop(0, `rgba(0,190,255,${(0.14 + breath * 0.12).toFixed(3)})`); g.addColorStop(1, 'rgba(0,190,255,0)');
     B.fillStyle = g; B.fillRect(0, 0, S, S);
 
-    // — ondas de choque a cada batida
-    for (const w of waves) {
-      const k = (t - w.t0) / 1.5; if (k > 1) continue;
-      B.strokeStyle = `rgba(48,213,255,${((1 - k) * 0.5).toFixed(3)})`; B.lineWidth = 2.2 * (1 - k) + 0.4;
-      B.beginPath(); B.ellipse(cx, cy, S * (0.24 + k * 0.26), S * (0.3 + k * 0.24), 0, 0, 6.2832); B.stroke();
+    // órbita: metade de trás atrás do ovo, metade da frente por cima
+    for (const [ctx, u0, al] of [[B, Math.PI, 0.18], [Fc, 0, 0.32]]) {
+      ctx.strokeStyle = `rgba(48,213,255,${al})`; ctx.lineWidth = 1; ctx.beginPath();
+      for (let i = 0; i <= 48; i++) { const [x, y] = pt(u0 + Math.PI * i / 48, cx, cy); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.stroke();
     }
+    // um ponto de luz percorrendo a órbita
+    const u = t * 0.8, ctx = Math.sin(u) >= 0 ? Fc : B, [x, y] = pt(u, cx, cy), r = S * 0.022;
+    const gg = ctx.createRadialGradient(x, y, 0, x, y, r);
+    gg.addColorStop(0, 'rgba(255,255,255,0.95)'); gg.addColorStop(0.35, 'rgba(48,213,255,0.7)'); gg.addColorStop(1, 'rgba(48,213,255,0)');
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
 
-    // — anéis de HUD girando em sentidos opostos
-    B.save(); B.translate(cx, cy);
-    B.rotate(t * 0.25); B.setLineDash([S * 0.012, S * 0.02]); B.strokeStyle = 'rgba(48,213,255,0.28)'; B.lineWidth = 1.2;
-    B.beginPath(); B.arc(0, 0, S * 0.405, 0, 6.2832); B.stroke();
-    B.rotate(-t * 0.6); B.setLineDash([]); B.strokeStyle = 'rgba(0,229,160,0.5)'; B.lineWidth = 2;
-    for (let i = 0; i < 3; i++) { B.beginPath(); B.arc(0, 0, S * 0.43, i * 2.094, i * 2.094 + 0.55); B.stroke(); }
-    B.rotate(t * 0.9); B.strokeStyle = 'rgba(48,213,255,0.35)'; B.lineWidth = 1;
-    for (let i = 0; i < 48; i++) { const a2 = i / 48 * 6.2832, r1 = S * 0.375, r2 = S * (i % 4 ? 0.383 : 0.392); B.beginPath(); B.moveTo(Math.cos(a2) * r1, Math.sin(a2) * r1); B.lineTo(Math.cos(a2) * r2, Math.sin(a2) * r2); B.stroke(); }
-    B.restore();
-
-    // — órbitas: metade de trás no canvas de trás, metade da frente por cima do ovo
-    Fc.globalCompositeOperation = 'lighter';
-    for (const o of ORB) {
-      for (const [ctx, u0, u1, al] of [[B, Math.PI, 2 * Math.PI, 0.22], [Fc, 0, Math.PI, 0.4]]) {
-        ctx.strokeStyle = rgba(o.col, al); ctx.lineWidth = 1.1; ctx.beginPath();
-        for (let i = 0; i <= 40; i++) { const [x, y] = orbPt(o, u0 + (u1 - u0) * i / 40, cx, cy); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-        ctx.stroke();
-      }
-      for (let e = 0; e < o.n; e++) {
-        const u = t * o.sp + o.ph + e * 6.2832 / o.n;
-        for (let k = 22; k >= 0; k--) {                       // rastro
-          const uu = u - Math.sign(o.sp) * k * 0.045, sn = Math.sin(uu), ctx = sn >= 0 ? Fc : B;
-          const [x, y] = orbPt(o, uu, cx, cy), depth = 0.75 + 0.25 * sn, f = 1 - k / 23;
-          ctx.fillStyle = rgba(o.col, f * f * 0.75 * (sn >= 0 ? 1 : 0.55));
-          ctx.beginPath(); ctx.arc(x, y, (k ? 2.6 * f : 3.4) * depth * S / 520 + 0.4, 0, 6.2832); ctx.fill();
-        }
-        const sn = Math.sin(u), ctx = sn >= 0 ? Fc : B, [x, y] = orbPt(o, u, cx, cy), rr = S * 0.03;
-        const gg = ctx.createRadialGradient(x, y, 0, x, y, rr);
-        gg.addColorStop(0, 'rgba(255,255,255,0.95)'); gg.addColorStop(0.25, rgba(o.col, 0.8)); gg.addColorStop(1, rgba(o.col, 0));
-        ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(x, y, rr, 0, 6.2832); ctx.fill();
-      }
-    }
-
-    // — scanner: faixa de luz subindo e descendo, recortada no formato do ovo
-    const erx = S * 0.2, ery = S * 0.255, sy = cy + Math.sin(t * 1.25) * ery * 0.92;
-    Fc.save(); Fc.beginPath(); Fc.ellipse(cx, cy, erx, ery, 0, 0, 6.2832); Fc.clip();
-    g = Fc.createLinearGradient(0, sy - S * 0.07, 0, sy + S * 0.07);
-    g.addColorStop(0, 'rgba(0,240,255,0)'); g.addColorStop(0.5, 'rgba(120,250,255,0.42)'); g.addColorStop(1, 'rgba(0,240,255,0)');
-    Fc.fillStyle = g; Fc.fillRect(cx - erx, sy - S * 0.07, erx * 2, S * 0.14);
-    Fc.fillStyle = 'rgba(220,255,255,0.9)'; Fc.fillRect(cx - erx, sy - 0.8, erx * 2, 1.6);
-    Fc.restore();
-    const hw = Math.sqrt(Math.max(0, 1 - Math.pow((sy - cy) / ery, 2))) * erx;   // largura do ovo nessa altura
-    Fc.fillStyle = 'rgba(160,255,255,0.95)';
-    for (const sx of [cx - hw, cx + hw]) { Fc.beginPath(); Fc.arc(sx, sy, 2.4, 0, 6.2832); Fc.fill(); }
-
-    // — partículas subindo (algumas na frente, outras atrás)
-    sparks.forEach((p, i) => {
-      if (!reduce) { p.y -= p.v * dt; if (p.y < 0) { p.y = 1; p.x = Math.random(); } }
-      const x = S * (0.12 + p.x * 0.76) + Math.sin(t * 0.9 + p.w) * 7, y = S * (0.1 + p.y * 0.82);
-      const a = Math.sin(p.y * Math.PI) * (0.35 + 0.35 * Math.sin(t * 3 + p.w));
-      const ctx = i % 3 ? B : Fc; ctx.fillStyle = p.g ? `rgba(0,229,160,${Math.max(0, a).toFixed(3)})` : `rgba(90,220,255,${Math.max(0, a).toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(x, y, p.r * S / 520 + 0.3, 0, 6.2832); ctx.fill();
-    });
-    B.globalCompositeOperation = 'source-over'; Fc.globalCompositeOperation = 'source-over';
     raf(frame);
   }
   new IntersectionObserver(([en]) => { visible = en.isIntersecting; }, { threshold: 0.02 }).observe(container);
