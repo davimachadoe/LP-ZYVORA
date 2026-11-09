@@ -307,73 +307,158 @@ function initEgg3D() {
 
 
 
-/* ── 6. DNA HELIX CINEMATIC 3D MOTION & INTERACTION ──────────── */
+/* ── 6. DNA: HÉLICE DUPLA 3D DE VERDADE (canvas) ──────────────── */
 function initDnaHelix() {
   const container = $('.science__visual');
-  const img = $('.dna-helix-img');
-  if (!container || !img) return;
+  const canvas = $('.dna-canvas');
+  if (!container || !canvas) return;
+  const ctx = canvas.getContext('2d');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  let mouseX = 0, mouseY = 0;
-  let targetRotY = 0, targetRotX = 0;
-  let currRotY = 0, currRotX = 0;
-  let isHovered = false;
-  let time = 0;
-  let animId = null;
-  let isDnaVisible = true;
+  // cores das bases (pares A–T e G–C) e das duas fitas
+  const BASES = { A: '#00B4FF', T: '#00E5A0', G: '#8B5CF6', C: '#30D5FF' };
+  const PAIRS = [['A', 'T'], ['T', 'A'], ['G', 'C'], ['C', 'G']];
+  const STRAND = ['#30D5FF', '#00E5A0'];
+  const seq = Array.from({ length: 64 }, (_, i) => PAIRS[(i * 7 + (i % 3) * 5 + (i >> 2)) % 4]);
 
+  let W = 0, H = 0, dpr = 1;
+  function resize() {
+    const r = canvas.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = r.width; H = r.height;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  new ResizeObserver(resize).observe(canvas);
+
+  let mx = 0, my = 0, tmx = 0, tmy = 0, hover = false;
   container.addEventListener('mousemove', (e) => {
-    const rect = container.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width - 0.5;
-    const y = (e.clientY - rect.top) / rect.height - 0.5;
-    mouseX = x * 26; // até ~13 graus de inclinação interativa
-    mouseY = -y * 16;
-    isHovered = true;
+    const r = container.getBoundingClientRect();
+    tmx = (e.clientX - r.left) / r.width - 0.5;
+    tmy = (e.clientY - r.top) / r.height - 0.5;
+    hover = true;
   });
+  container.addEventListener('mouseleave', () => { tmx = 0; tmy = 0; hover = false; });
 
-  container.addEventListener('mouseleave', () => {
-    isHovered = false;
-    mouseX = 0;
-    mouseY = 0;
-  });
+  const hexA = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a.toFixed(3)})`;
+  };
 
-  function updateDnaMotion() {
-    if (!isDnaVisible || !isPageVisible) {
-      animId = raf(updateDnaMotion);
-      return;
-    }
+  let t = 0, speed = 0.55, last = performance.now(), visible = true, animId = null;
 
-    time += 0.028;
-
-    // Movimento senoidal orgânico contínuo (respiração / flutuação holográfica 3D)
-    const naturalRotY = Math.sin(time * 0.9) * 11;
-    const naturalRotX = Math.cos(time * 0.7) * 5.5;
-    const naturalRotZ = Math.sin(time * 0.5) * 2;
-    const naturalTranslateY = Math.sin(time * 1.3) * 12;
-    const naturalScale = 1.02 + Math.sin(time * 0.6) * 0.02;
-
-    if (isHovered) {
-      targetRotY = naturalRotY * 0.25 + mouseX;
-      targetRotX = naturalRotX * 0.25 + mouseY;
-    } else {
-      targetRotY = naturalRotY;
-      targetRotX = naturalRotX;
-    }
-
-    // Interpolação suave e contínua com inércia
-    currRotY += (targetRotY - currRotY) * 0.08;
-    currRotX += (targetRotX - currRotX) * 0.08;
-
-    img.style.transform = `perspective(1100px) translateY(${naturalTranslateY.toFixed(2)}px) rotateY(${currRotY.toFixed(2)}deg) rotateX(${currRotX.toFixed(2)}deg) rotateZ(${naturalRotZ.toFixed(2)}deg) scale(${naturalScale.toFixed(3)})`;
-
-    animId = raf(updateDnaMotion);
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (!visible || !isPageVisible) { animId = raf(frame); return; }
+    mx += (tmx - mx) * 0.06; my += (tmy - my) * 0.06;
+    speed += ((hover ? 1.1 : 0.55) - speed) * 0.04;
+    if (!reduce) t += dt * speed;
+    draw();
+    animId = raf(frame);
   }
 
-  // Observador de visibilidade para economia de GPU/CPU
-  new IntersectionObserver(([entry]) => {
-    isDnaVisible = entry.isIntersecting;
-  }, { threshold: 0.05 }).observe(container);
+  // mistura a cor com o fundo (opaca), para dar profundidade sem "contas" nas emendas
+  const BG = [2, 13, 28];
+  const mix = (hex, k, lift = 0) => {
+    const n = parseInt(hex.slice(1), 16), c = [n >> 16, (n >> 8) & 255, n & 255];
+    return `rgb(${c.map((v, i) => Math.round(BG[i] + (Math.min(255, v + (255 - v) * lift) - BG[i]) * k)).join(',')})`;
+  };
 
-  updateDnaMotion();
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2;
+    const phi = (-18 + my * 12) * Math.PI / 180;           // inclinação do eixo
+    const ax = Math.cos(phi), ay = Math.sin(phi);
+    const nx = -ay, ny = ax;
+    const L = Math.min(W * 1.08, Math.hypot(W, H) * 0.95);  // comprimento visível
+    const R = Math.min(W, H) * 0.16;                        // raio da hélice
+    const turns = 2.4, pairs = Math.round(turns * 10.5);    // ~10,5 pares por volta, como no DNA B
+    const groove = 2.3;                                     // sulco maior e menor
+    const F = R * 14;                                       // perspectiva suave
+    const yaw = mx * 0.5;
+    const cyw = Math.cos(yaw), syw = Math.sin(yaw);
+
+    const P = (s, ang) => {
+      const py = R * Math.cos(ang), pz = R * Math.sin(ang);
+      const x2 = s * cyw + pz * syw, z2 = -s * syw + pz * cyw;
+      const k = F / (F - z2);
+      return { x: cx + (x2 * ax + py * nx) * k, y: cy + (x2 * ay + py * ny) * k, z: z2, k };
+    };
+    const fade = (s) => { const u = Math.abs(s) / (L / 2); return u >= 1 ? 0 : u < 0.62 ? 1 : 1 - Math.pow((u - 0.62) / 0.38, 2); };
+    const depth = (z) => 0.32 + 0.68 * ((z / R + 1) / 2);
+
+    // amostras das duas fitas
+    const N = 240, strands = [[], []];
+    for (let st = 0; st < 2; st++) for (let i = 0; i <= N; i++) {
+      const s = -L / 2 + (L * i) / N;
+      const p = P(s, (s / L) * turns * Math.PI * 2 + t * 2 + st * groove);
+      p.f = fade(s); strands[st].push(p);
+    }
+
+    // 1) brilho por baixo de tudo, em traço contínuo
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalCompositeOperation = 'lighter';
+    for (let st = 0; st < 2; st++) {
+      const pts = strands[st];
+      for (const [lw, al] of [[22, 0.05], [12, 0.08]]) {
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1], b = pts[i], f = Math.min(a.f, b.f) * depth((a.z + b.z) / 2);
+          if (f <= 0.02) continue;
+          ctx.strokeStyle = STRAND[st] + Math.round(al * f * 255).toString(16).padStart(2, '0');
+          ctx.lineWidth = lw * a.k; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        }
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    // 2) geometria opaca, de trás para frente
+    const items = [];
+    for (let st = 0; st < 2; st++) {
+      const pts = strands[st];
+      for (let i = 1; i < pts.length; i++) items.push({ z: (pts[i - 1].z + pts[i].z) / 2, kind: 'seg', a: pts[i - 1], b: pts[i], col: STRAND[st] });
+    }
+    for (let i = 0; i < pairs; i++) {
+      const s = -L / 2 + (L * (i + 0.5)) / pairs, f = fade(s); if (f <= 0.03) continue;
+      const base = (s / L) * turns * Math.PI * 2 + t * 2;
+      const a = P(s, base), b = P(s, base + groove);
+      const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2, k: (a.k + b.k) / 2 };
+      const [b1, b2] = seq[i % seq.length];
+      items.push({ z: (a.z + m.z) / 2 - 1, kind: 'rung', a, b: m, col: BASES[b1], f });
+      items.push({ z: (b.z + m.z) / 2 - 1, kind: 'rung', a: b, b: m, col: BASES[b2], f });
+      items.push({ z: a.z + 0.5, kind: 'node', p: a, col: STRAND[0], f });
+      items.push({ z: b.z + 0.5, kind: 'node', p: b, col: STRAND[1], f });
+    }
+    items.sort((p, q) => p.z - q.z);
+
+    for (const it of items) {
+      if (it.kind === 'seg') {
+        const f = Math.min(it.a.f, it.b.f); if (f <= 0.01) continue;
+        const d = depth(it.z) * f, k = (it.a.k + it.b.k) / 2;
+        // pontas retas e um pouco estendidas: emenda contínua, sem "contas"
+        const dx = it.b.x - it.a.x, dy = it.b.y - it.a.y, ln = Math.hypot(dx, dy) || 1, ex = dx / ln * 0.8, ey = dy / ln * 0.8;
+        ctx.lineCap = 'butt';
+        ctx.strokeStyle = mix(it.col, d); ctx.lineWidth = 7 * k;
+        ctx.beginPath(); ctx.moveTo(it.a.x - ex, it.a.y - ey); ctx.lineTo(it.b.x + ex, it.b.y + ey); ctx.stroke();
+        ctx.strokeStyle = mix(it.col, d, 0.5); ctx.lineWidth = 2 * k;
+        ctx.beginPath(); ctx.moveTo(it.a.x - ex, it.a.y - ey); ctx.lineTo(it.b.x + ex, it.b.y + ey); ctx.stroke();
+      } else if (it.kind === 'rung') {
+        const d = depth(it.z) * it.f;
+        ctx.lineCap = 'butt';
+        ctx.strokeStyle = mix(it.col, d * 0.92); ctx.lineWidth = 4.2 * it.a.k;
+        ctx.beginPath(); ctx.moveTo(it.a.x, it.a.y); ctx.lineTo(it.b.x, it.b.y); ctx.stroke();
+      } else {
+        const d = depth(it.z) * it.f, r = 5 * it.p.k;
+        ctx.fillStyle = mix(it.col, d, 0.25);
+        ctx.beginPath(); ctx.arc(it.p.x, it.p.y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = mix('#FFFFFF', d * 0.85);
+        ctx.beginPath(); ctx.arc(it.p.x - r * 0.3, it.p.y - r * 0.3, r * 0.38, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+
+  new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; }, { threshold: 0.05 }).observe(container);
+  animId = raf(frame);
 }
 
 /* ── 7. CTA CANVAS PARTICLES ({ } FORMATION) ──────────────────── */

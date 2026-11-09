@@ -2672,3 +2672,6 @@ button {
 .footer__brand-img{height:56px;width:56px;max-width:none;margin:0;border-radius:0;filter:drop-shadow(0 0 12px rgba(61,214,245,.4))}
 .footer__brand-name{height:22px;width:auto;display:block}
 @media (max-width:600px){.nav__logo-img{height:38px;width:38px}.nav__logo-name{height:17px}}
+
+/* DNA desenhado em canvas (hélice dupla 3D) */
+.dna-canvas{position:relative;width:100%;height:100%;display:block;z-index:2}
