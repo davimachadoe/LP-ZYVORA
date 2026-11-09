@@ -2684,3 +2684,32 @@ button {
 .egg-hero-img--live{position:relative;z-index:2;width:82%;height:82%;border-radius:0;transition:none;will-change:transform;
   filter:drop-shadow(0 0 22px rgba(0,200,255,.5)) drop-shadow(0 14px 40px rgba(0,120,255,.35))}
 .egg-3d-canvas-container:hover .egg-hero-img--live{filter:drop-shadow(0 0 22px rgba(0,200,255,.5)) drop-shadow(0 14px 40px rgba(0,120,255,.35))}
+
+/* ===== Ajustes de celular ===== */
+html,body{overflow-x:clip;max-width:100%}
+img,svg,canvas,video{max-width:100%}
+@media (max-width:768px){
+  .container,.hero__container,.nav__inner{padding-inline:1.25rem}
+  [data-animate="fade-left"],[data-animate="fade-right"]{transform:translateY(24px)}
+  [data-animate].in-view{transform:none}
+  .problem__transition{gap:12px}
+  .problem__transition-line{display:none}
+  .problem__transition-text{white-space:normal;font-size:1rem;line-height:1.4;text-wrap:balance}
+  .hero__badge{font-size:.68rem;letter-spacing:.06em;padding:.45rem .9rem;text-wrap:balance;text-align:center}
+  .hero__title{text-wrap:balance}
+  .section-title,.section-subtitle,.cta-final__title,.cta-final__subtitle{text-wrap:balance}
+  .science__visual{height:auto;aspect-ratio:1/1;max-width:100%}
+  .dna-hud-badge{font-size:.6rem;padding:.35rem .7rem;max-width:calc(100% - 24px);white-space:normal}
+  .dna-hud-badge--top{top:12px;left:12px}
+  .dna-hud-badge--bottom{bottom:12px;right:12px}
+  .science__pills{flex-wrap:wrap}
+  .feature-card__glow,.hero__orb,.cta-final__orb{max-width:100vw}
+  .incubator-hero-chamber{width:100%}
+  .controller-360{max-width:calc(100% - 24px);font-size:.65rem;gap:6px;white-space:nowrap}
+  .cta-final__ctas{flex-direction:column;align-items:stretch;width:100%}
+  .cta-final__ctas .btn{justify-content:center;width:100%}
+  .footer__brand-text{max-width:none}
+}
+@media (max-width:380px){
+  .controller-360 span:first-of-type{display:none}
+}
